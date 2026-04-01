@@ -75,6 +75,10 @@ export function assertWebChannel(input: string): asserts input is WebChannel {
 
 export function normalizeE164(number: string): string {
   const withoutPrefix = number.replace(/^whatsapp:/, "").trim();
+  // Handle empty string after trim
+  if (withoutPrefix === "") {
+    return "";
+  }
   const digits = withoutPrefix.replace(/[^\d+]/g, "");
   if (digits.startsWith("+")) {
     return `+${digits.slice(1)}`;
@@ -112,10 +116,18 @@ export function isSelfChatMode(
 
 export function toWhatsappJid(number: string): string {
   const withoutPrefix = number.replace(/^whatsapp:/, "").trim();
+  // Handle empty string after trim
+  if (withoutPrefix === "") {
+    return "";
+  }
   if (withoutPrefix.includes("@")) {
     return withoutPrefix;
   }
   const e164 = normalizeE164(withoutPrefix);
+  // If normalizeE164 returns empty string, propagate it
+  if (e164 === "") {
+    return "";
+  }
   const digits = e164.replace(/\D/g, "");
   return `${digits}@s.whatsapp.net`;
 }
@@ -286,8 +298,10 @@ export function resolveConfigDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string {
-  const override = env.OPENCLAW_STATE_DIR?.trim();
-  if (override) {
+  const overrideRaw = env.OPENCLAW_STATE_DIR;
+  const override = overrideRaw?.trim();
+  // Explicitly check for empty string after trim (whitespace-only env vars)
+  if (override && override !== "") {
     return resolveUserPath(override, env, homedir);
   }
   const newDir = path.join(resolveRequiredHomeDir(env, homedir), ".openclaw");
@@ -311,8 +325,10 @@ function resolveHomeDisplayPrefix(): { home: string; prefix: string } | undefine
   if (!home) {
     return undefined;
   }
-  const explicitHome = process.env.OPENCLAW_HOME?.trim();
-  if (explicitHome) {
+  const explicitHomeRaw = process.env.OPENCLAW_HOME;
+  const explicitHome = explicitHomeRaw?.trim();
+  // Explicitly check for empty string after trim (whitespace-only env vars)
+  if (explicitHome && explicitHome !== "") {
     return { home, prefix: "$OPENCLAW_HOME" };
   }
   return { home, prefix: "~" };
@@ -344,7 +360,15 @@ export function shortenHomeInString(input: string): string {
   if (!display) {
     return input;
   }
-  return input.split(display.home).join(display.prefix);
+  const { home, prefix } = display;
+  // Use path-specific replacement instead of split/join to avoid multiple replacements
+  if (input === home) {
+    return prefix;
+  }
+  if (input.startsWith(`${home}/`) || input.startsWith(`${home}\\`)) {
+    return `${prefix}${input.slice(home.length)}`;
+  }
+  return input;
 }
 
 export function displayPath(input: string): string {
